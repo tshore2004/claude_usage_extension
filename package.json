@@ -4,11 +4,26 @@
   "description": "Displays Claude Code token usage and cost statistics in the VS Code status bar",
   "version": "0.1.0",
   "publisher": "tshor",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "claude-logo": {
+        "description": "Claude-inspired hexagonal icon",
+        "default": {
+          "fontPath": "./icons/dist/claude-code-usage.ttf",
+          "fontCharacter": ""
+        }
+      }
+    },
     "commands": [
       {
         "command": "claude-code-usage.showDetails",
@@ -18,20 +33,27 @@
     "configuration": {
       "title": "Claude Code Usage",
       "properties": {
+        "claude-code-usage.sessionBudgetUSD": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "description": "Your Claude 5-hour session budget in USD. The status bar shows spending in the last 5 hours as a percentage of this value. Adjust to match your plan: Pro ≈ $2, Max5 ≈ $6, Max20 ≈ $20."
+        },
         "claude-code-usage.monthlyBudget": {
           "type": "number",
           "default": 50,
           "minimum": 1,
-          "description": "Your monthly Claude Code budget in USD. The status bar shows this month's spend as a percentage of this value."
+          "description": "Your monthly Claude Code budget in USD. Shown in the tooltip alongside the session window."
         }
       }
     }
   },
   "scripts": {
+    "create-icons": "node scripts/create-icons.js",
     "compile": "tsc --noEmit",
     "bundle": "node esbuild.config.js",
     "watch": "node esbuild.config.js --watch",
-    "vscode:prepublish": "node esbuild.config.js --production",
+    "vscode:prepublish": "node scripts/create-icons.js && node esbuild.config.js --production",
     "pretest": "tsc -p tsconfig.test.json --outDir out-test",
     "test": "node ./out-test/test/runTests.js"
   },
@@ -41,7 +63,10 @@
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.3.8",
     "esbuild": "^0.20.0",
+    "fantasticon": "^4.1.0",
     "mocha": "^10.3.0",
+    "svg2ttf": "^6.1.0",
+    "svgicons2svgfont": "^15.0.1",
     "typescript": "^5.3.3"
   }
 }

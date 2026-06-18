@@ -49,13 +49,17 @@ export function deduplicateSessions(entries: CostEntry[]): CostEntry[] {
   return Array.from(bySession.values());
 }
 
-export function aggregateStats(entries: CostEntry[], now: Date = new Date()): UsageStats {
-  const todayPrefix  = now.toISOString().slice(0, 10);
-  const monthPrefix  = now.toISOString().slice(0, 7);
+const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000; // 5-hour rolling window
 
-  const today     = emptySummary();
-  const thisMonth = emptySummary();
-  const allTime   = emptySummary();
+export function aggregateStats(entries: CostEntry[], now: Date = new Date()): UsageStats {
+  const todayPrefix    = now.toISOString().slice(0, 10);
+  const monthPrefix    = now.toISOString().slice(0, 7);
+  const windowCutoff   = new Date(now.getTime() - SESSION_WINDOW_MS).toISOString();
+
+  const today         = emptySummary();
+  const thisMonth     = emptySummary();
+  const sessionWindow = emptySummary();
+  const allTime       = emptySummary();
   const byModel: Record<string, UsageSummary> = {};
 
   for (const entry of entries) {
@@ -65,12 +69,13 @@ export function aggregateStats(entries: CostEntry[], now: Date = new Date()): Us
     addToSummary(allTime, entry);
     if (m === monthPrefix) { addToSummary(thisMonth, entry); }
     if (d === todayPrefix) { addToSummary(today, entry); }
+    if (entry.timestamp >= windowCutoff) { addToSummary(sessionWindow, entry); }
 
     if (!byModel[entry.model]) { byModel[entry.model] = emptySummary(); }
     addToSummary(byModel[entry.model], entry);
   }
 
-  return { today, thisMonth, allTime, byModel, lastUpdated: now };
+  return { today, thisMonth, sessionWindow, allTime, byModel, lastUpdated: now };
 }
 
 function isValidEntry(obj: unknown): obj is CostEntry {

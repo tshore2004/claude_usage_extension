@@ -11,21 +11,23 @@ export function formatTokenCount(n: number): string {
   return String(n);
 }
 
-export function formatStatusBarText(stats: UsageStats | null, monthlyBudget: number): string {
-  if (!stats) { return '$(cloud) No data'; }
-  const pct = Math.round((stats.thisMonth.cost / monthlyBudget) * 100);
-  return `$(cloud) ${pct}%`;
+export function formatStatusBarText(stats: UsageStats | null, sessionBudget: number): string {
+  if (!stats) { return '$(claude-logo) No data'; }
+  const pct = Math.min(999, Math.round((stats.sessionWindow.cost / sessionBudget) * 100));
+  return `$(claude-logo) ${pct}%`;
 }
 
-export function formatTooltip(stats: UsageStats | null, monthlyBudget: number): string {
+export function formatTooltip(stats: UsageStats | null, sessionBudget: number, monthlyBudget: number): string {
   if (!stats) { return 'Claude Code Usage: No data available'; }
-  const { today, thisMonth, allTime } = stats;
-  const pct = Math.round((thisMonth.cost / monthlyBudget) * 100);
+  const { today, thisMonth, sessionWindow, allTime } = stats;
+  const sessionPct = Math.min(999, Math.round((sessionWindow.cost / sessionBudget) * 100));
+  const monthPct   = Math.round((thisMonth.cost / monthlyBudget) * 100);
   return [
-    `This month: ${formatCost(thisMonth.cost)} / ${formatCost(monthlyBudget)} (${pct}%)`,
-    `Today:      ${formatCost(today.cost)}`,
-    `All time:   ${formatCost(allTime.cost)}`,
-    `Updated:    ${stats.lastUpdated.toLocaleTimeString()}`,
+    `5-hr window: ${formatCost(sessionWindow.cost)} / ${formatCost(sessionBudget)} (${sessionPct}%)`,
+    `Today:       ${formatCost(today.cost)}`,
+    `This month:  ${formatCost(thisMonth.cost)} / ${formatCost(monthlyBudget)} (${monthPct}%)`,
+    `All time:    ${formatCost(allTime.cost)}`,
+    `Updated:     ${stats.lastUpdated.toLocaleTimeString()}`,
   ].join('\n');
 }
 
@@ -52,13 +54,13 @@ export class StatusBarController implements vscode.Disposable {
     this.item.show();
   }
 
-  update(stats: UsageStats | null, monthlyBudget: number): void {
-    this.item.text = formatStatusBarText(stats, monthlyBudget);
-    this.item.tooltip = formatTooltip(stats, monthlyBudget);
+  update(stats: UsageStats | null, sessionBudget: number, monthlyBudget: number): void {
+    this.item.text = formatStatusBarText(stats, sessionBudget);
+    this.item.tooltip = formatTooltip(stats, sessionBudget, monthlyBudget);
   }
 
   setError(message: string): void {
-    this.item.text = '$(cloud) $(error)';
+    this.item.text = '$(claude-logo) $(error)';
     this.item.tooltip = `Claude Code Usage: ${message}`;
   }
 

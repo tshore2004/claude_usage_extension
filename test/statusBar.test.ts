@@ -10,10 +10,11 @@ function makeSummary(cost: number): UsageSummary {
   return { cost, inputTokens: 100, outputTokens: 200, cacheWriteTokens: 300, cacheReadTokens: 400, entryCount: 1 };
 }
 
-function makeStats(todayCost: number, monthCost: number, allTimeCost: number): UsageStats {
+function makeStats(todayCost: number, monthCost: number, allTimeCost: number, sessionCost = todayCost): UsageStats {
   return {
     today: makeSummary(todayCost),
     thisMonth: makeSummary(monthCost),
+    sessionWindow: makeSummary(sessionCost),
     allTime: makeSummary(allTimeCost),
     byModel: { 'claude-sonnet-4-6': makeSummary(allTimeCost) },
     lastUpdated: new Date('2026-06-18T12:00:00Z'),
@@ -36,14 +37,14 @@ suite('formatTokenCount', () => {
 
 suite('formatStatusBarText', () => {
   test('returns "No data" text when stats is null', () => {
-    assert.ok(formatStatusBarText(null, 50).includes('No data'));
+    assert.ok(formatStatusBarText(null, 20).includes('No data'));
   });
-  test('shows percentage of monthly budget', () => {
-    // thisMonth=20, budget=50 → 40%
-    assert.ok(formatStatusBarText(makeStats(5, 20, 30), 50).includes('40%'));
+  test('shows percentage of session budget using sessionWindow cost', () => {
+    // sessionWindow=10 (sessionCost arg), sessionBudget=20 → 50%
+    assert.ok(formatStatusBarText(makeStats(5, 20, 30, 10), 20).includes('50%'));
   });
-  test('starts with cloud codicon', () => {
-    assert.ok(formatStatusBarText(makeStats(5, 5, 5), 50).startsWith('$(cloud)'));
+  test('starts with claude-logo codicon', () => {
+    assert.ok(formatStatusBarText(makeStats(5, 5, 5), 20).startsWith('$(claude-logo)'));
   });
 });
 
