@@ -1,0 +1,36 @@
+{
+  "name": "claude-code-usage",
+  "displayName": "Claude Code Usage",
+  "description": "Displays Claude Code token usage and cost statistics in the VS Code status bar",
+  "version": "0.1.0",
+  "publisher": "tshor",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claude-code-usage.showDetails",
+        "title": "Claude Code Usage: Show Detailed Breakdown"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc --noEmit",
+    "bundle": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "vscode:prepublish": "node esbuild.config.js --production",
+    "pretest": "tsc -p tsconfig.test.json --outDir out-test",
+    "test": "node ./out-test/test/runTests.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "esbuild": "^0.20.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.3"
+  }
+}
