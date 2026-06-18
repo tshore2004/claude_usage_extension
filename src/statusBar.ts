@@ -11,19 +11,33 @@ export function formatTokenCount(n: number): string {
   return String(n);
 }
 
+function formatTimeRemaining(expiresAt: Date | null, now: Date = new Date()): string | null {
+  if (!expiresAt) { return null; }
+  const ms = expiresAt.getTime() - now.getTime();
+  if (ms <= 0) { return null; }
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function formatStatusBarText(stats: UsageStats | null, sessionBudget: number): string {
   if (!stats) { return '$(claude-logo) No data'; }
-  const pct = Math.min(999, Math.round((stats.sessionWindow.cost / sessionBudget) * 100));
-  return `$(claude-logo) ${pct}%`;
+  const timeLeft = formatTimeRemaining(stats.sessionWindowExpiresAt);
+  const pct = `${Math.min(999, Math.round((stats.sessionWindow.cost / sessionBudget) * 100))}%`;
+  return timeLeft ? `$(claude-logo) ${pct} ${timeLeft}` : `$(claude-logo) ${pct}`;
 }
 
 export function formatTooltip(stats: UsageStats | null, sessionBudget: number, monthlyBudget: number): string {
   if (!stats) { return 'Claude Code Usage: No data available'; }
-  const { today, thisMonth, sessionWindow, allTime } = stats;
+  const { today, thisMonth, sessionWindow, sessionWindowExpiresAt, allTime } = stats;
   const sessionPct = Math.min(999, Math.round((sessionWindow.cost / sessionBudget) * 100));
   const monthPct   = Math.round((thisMonth.cost / monthlyBudget) * 100);
+  const timeLeft   = formatTimeRemaining(sessionWindowExpiresAt);
+  const windowLine = timeLeft
+    ? `5-hr window: ${formatCost(sessionWindow.cost)} / ${formatCost(sessionBudget)} (${sessionPct}%)  ·  resets in ${timeLeft}`
+    : `5-hr window: ${formatCost(sessionWindow.cost)} / ${formatCost(sessionBudget)} (${sessionPct}%)`;
   return [
-    `5-hr window: ${formatCost(sessionWindow.cost)} / ${formatCost(sessionBudget)} (${sessionPct}%)`,
+    windowLine,
     `Today:       ${formatCost(today.cost)}`,
     `This month:  ${formatCost(thisMonth.cost)} / ${formatCost(monthlyBudget)} (${monthPct}%)`,
     `All time:    ${formatCost(allTime.cost)}`,

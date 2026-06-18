@@ -1,30 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
   <!--
-    Claude-inspired icon: a solid hexagon with a stylised C carved out
-    (even-odd fill rule: outer hex clockwise, inner C-shape clockwise → inner becomes transparent)
+    Bold C shape as a single filled path.
+    Outer arc radius=210, inner arc radius=115, opening gap at 40° from horizontal.
+    No fill-rule tricks needed — one contiguous path traces the C shape.
   -->
-  <path fill="currentColor" fill-rule="evenodd"
-    d="
-      M250 20
-      L468 145
-      V355
-      L250 480
-      L32 355
-      V145
-      Z
-
-      M250 110
-      C186 110 130 150 108 207
-      L165 228
-      C181 189 213 162 250 162
-      C307 162 353 208 353 265
-      C353 322 307 368 250 368
-      C213 368 181 341 165 302
-      L108 323
-      C130 380 186 420 250 420
-      C337 420 408 349 408 265
-      C408 181 337 110 250 110
-      Z
-    "
+  <path
+    d="M 411 115
+       A 210 210 0 1 0 411 385
+       L 338 324
+       A 115 115 0 1 1 338 176
+       Z"
   />
 </svg>

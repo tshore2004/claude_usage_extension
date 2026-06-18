@@ -6,6 +6,8 @@ import {
   parseEntry,
   deduplicateSessions,
   aggregateStats,
+  computeWindowExpiry,
+  SESSION_WINDOW_MS,
   readUsageStats,
 } from '../src/usageReader';
 import { CostEntry } from '../src/types';
@@ -124,17 +126,59 @@ suite('aggregateStats', () => {
     assert.strictEqual(stats.allTime.cost, 0);
     assert.deepStrictEqual(stats.byModel, {});
   });
+
+  test('sessionWindowExpiresAt is oldest-entry-timestamp + 5h', () => {
+    const now = new Date(`${TODAY}T12:00:00Z`);
+    const entries: CostEntry[] = [
+      makeEntry({ session_id: 'a', timestamp: `${TODAY}T08:00:00Z`, estimated_cost_usd: 1.0 }), // 4h ago
+      makeEntry({ session_id: 'b', timestamp: `${TODAY}T10:00:00Z`, estimated_cost_usd: 2.0 }), // 2h ago
+    ];
+    const stats = aggregateStats(entries, now);
+    assert.ok(stats.sessionWindowExpiresAt);
+    // oldest entry is 08:00 → expires at 08:00 + 5h = 13:00
+    assert.strictEqual(stats.sessionWindowExpiresAt!.toISOString(), `${TODAY}T13:00:00.000Z`);
+  });
+
+  test('sessionWindowExpiresAt is null when no entries are in the window', () => {
+    const now = new Date(`${TODAY}T12:00:00Z`);
+    const entries: CostEntry[] = [
+      makeEntry({ session_id: 'old', timestamp: '2026-06-17T00:00:00Z', estimated_cost_usd: 1.0 }),
+    ];
+    const stats = aggregateStats(entries, now);
+    assert.strictEqual(stats.sessionWindowExpiresAt, null);
+  });
+
+});
+
+suite('computeWindowExpiry', () => {
+  test('uses first activity of session, not deduplicated latest snapshot', () => {
+    const now = new Date(`${TODAY}T12:00:00Z`);
+    // Session 'a' started at 07:00, had a later snapshot at 08:10 (both same session_id)
+    const raw: CostEntry[] = [
+      makeEntry({ session_id: 'a', timestamp: `${TODAY}T07:00:00Z`, estimated_cost_usd: 2.0 }),
+      makeEntry({ session_id: 'a', timestamp: `${TODAY}T08:10:00Z`, estimated_cost_usd: 5.0 }),
+    ];
+    const deduped = deduplicateSessions(raw); // keeps 08:10 entry
+    const expiry = computeWindowExpiry(raw, deduped, now);
+    assert.ok(expiry);
+    // Must use 07:00 (first activity), not 08:10 (latest snapshot)
+    assert.strictEqual(expiry!.toISOString(), `${TODAY}T12:00:00.000Z`); // 07:00 + 5h
+  });
 });
 
 suite('readUsageStats (file I/O)', () => {
   let tmpFile: string;
+  let transcriptFile: string;
 
   setup(() => {
-    tmpFile = path.join(os.tmpdir(), `costs-test-${Date.now()}.jsonl`);
+    const stamp = Date.now();
+    tmpFile = path.join(os.tmpdir(), `costs-test-${stamp}.jsonl`);
+    transcriptFile = path.join(os.tmpdir(), `transcript-test-${stamp}.jsonl`);
   });
 
   teardown(() => {
     if (fs.existsSync(tmpFile)) { fs.unlinkSync(tmpFile); }
+    if (fs.existsSync(transcriptFile)) { fs.unlinkSync(transcriptFile); }
   });
 
   test('returns null when file does not exist', async () => {
@@ -161,5 +205,42 @@ suite('readUsageStats (file I/O)', () => {
     const result = await readUsageStats(tmpFile);
     assert.ok(result);
     assertCloseTo(result!.allTime.cost, 2.0);
+  });
+
+  // Claude Code transcripts start with 3 header lines (last-prompt, mode, permission-mode)
+  // that have NO timestamp field. The 4th line is the first real entry with a timestamp.
+  // getTranscriptStartTime must skip those headers and return the first timestamped line.
+  test('uses transcript start time even when first lines have no timestamp (header lines)', async () => {
+    const headerLines = [
+      JSON.stringify({ type: 'last-prompt', leafUuid: 'abc', sessionId: 'xyz' }),
+      JSON.stringify({ type: 'mode', mode: 'normal', sessionId: 'xyz' }),
+      JSON.stringify({ type: 'permission-mode', permissionMode: 'default', sessionId: 'xyz' }),
+    ];
+    const firstTimestamped = JSON.stringify({
+      type: 'attachment', timestamp: `${TODAY}T07:30:00.000Z`,
+      sessionId: 'xyz', uuid: 'u1',
+    });
+    fs.writeFileSync(transcriptFile, [...headerLines, firstTimestamped].join('\n') + '\n');
+
+    // costs.jsonl first entry is at 08:10 — 40 minutes LATER than transcript start
+    const entry = makeEntry({
+      session_id: 'sess-a',
+      timestamp: `${TODAY}T08:10:00Z`,
+      transcript_path: transcriptFile,
+      estimated_cost_usd: 5.0,
+    });
+    fs.writeFileSync(tmpFile, JSON.stringify(entry) + '\n');
+
+    const now = new Date(`${TODAY}T11:00:00Z`); // 3h 50m after costs entry, 3h 30m after transcript
+    const result = await readUsageStats(tmpFile, now);
+    assert.ok(result);
+    assert.ok(result!.sessionWindowExpiresAt, 'sessionWindowExpiresAt should be set');
+    // Correct: transcript 07:30 + 5h = 12:30
+    // Wrong (pre-fix): costs.jsonl 08:10 + 5h = 13:10
+    assert.strictEqual(
+      result!.sessionWindowExpiresAt!.toISOString(),
+      `${TODAY}T12:30:00.000Z`,
+      'must use transcript start (07:30+5h=12:30), not costs.jsonl start (08:10+5h=13:10)',
+    );
   });
 });

@@ -23,7 +23,64 @@ export async function readUsageStats(
 
   if (rawEntries.length === 0) { return null; }
 
-  return aggregateStats(deduplicateSessions(rawEntries), now);
+  const deduped = deduplicateSessions(rawEntries);
+  const stats = aggregateStats(deduped, now);
+
+  // Use transcript start times for accurate window expiry. costs.jsonl entries are
+  // written in batches; the transcript records the true first-message timestamp.
+  stats.sessionWindowExpiresAt = await computeAccurateWindowExpiry(rawEntries, deduped, now);
+
+  return stats;
+}
+
+async function computeAccurateWindowExpiry(
+  raw: CostEntry[],
+  deduped: CostEntry[],
+  now: Date,
+): Promise<Date | null> {
+  const windowCutoff = new Date(now.getTime() - SESSION_WINDOW_MS).toISOString();
+  const sessionsInWindow = deduped.filter(e => e.timestamp >= windowCutoff);
+  if (sessionsInWindow.length === 0) { return null; }
+
+  let oldest: string | null = null;
+
+  for (const session of sessionsInWindow) {
+    // Earliest raw snapshot for this session
+    const rawForSession = raw.filter(e => e.session_id === session.session_id);
+    if (rawForSession.length === 0) { continue; }
+    const firstRaw = rawForSession.reduce((min, e) => (e.timestamp < min.timestamp ? e : min));
+
+    // Try the transcript for the true session-start timestamp
+    const transcriptStart = await getTranscriptStartTime(firstRaw.transcript_path);
+    const sessionStart = (transcriptStart && transcriptStart < firstRaw.timestamp)
+      ? transcriptStart
+      : firstRaw.timestamp;
+
+    if (!oldest || sessionStart < oldest) { oldest = sessionStart; }
+  }
+
+  return oldest ? new Date(new Date(oldest).getTime() + SESSION_WINDOW_MS) : null;
+}
+
+async function getTranscriptStartTime(transcriptPath: string): Promise<string | null> {
+  try {
+    const fd = await fs.promises.open(transcriptPath, 'r');
+    const buf = Buffer.alloc(8192);
+    const { bytesRead } = await fd.read(buf, 0, 8192, 0);
+    await fd.close();
+    // Claude Code transcripts begin with 3 header lines (last-prompt, mode, permission-mode)
+    // that have no timestamp. Scan all lines until we find one with a timestamp field.
+    for (const line of buf.slice(0, bytesRead).toString('utf-8').split('\n')) {
+      if (!line.trim()) { continue; }
+      try {
+        const obj = JSON.parse(line.trim());
+        if (typeof obj.timestamp === 'string') { return obj.timestamp; }
+      } catch { continue; }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function parseEntry(line: string): CostEntry | null {
@@ -49,7 +106,21 @@ export function deduplicateSessions(entries: CostEntry[]): CostEntry[] {
   return Array.from(bySession.values());
 }
 
-const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000; // 5-hour rolling window
+export const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000; // 5-hour rolling window
+
+// Returns when the 5-hour window starts freeing up, using each session's FIRST
+// activity (raw entries) rather than the deduplicated latest-snapshot timestamp.
+export function computeWindowExpiry(raw: CostEntry[], deduped: CostEntry[], now: Date): Date | null {
+  const windowCutoff = new Date(now.getTime() - SESSION_WINDOW_MS).toISOString();
+  const inWindow = new Set(deduped.filter(e => e.timestamp >= windowCutoff).map(e => e.session_id));
+  let oldest: string | null = null;
+  for (const e of raw) {
+    if (inWindow.has(e.session_id) && (!oldest || e.timestamp < oldest)) {
+      oldest = e.timestamp;
+    }
+  }
+  return oldest ? new Date(new Date(oldest).getTime() + SESSION_WINDOW_MS) : null;
+}
 
 export function aggregateStats(entries: CostEntry[], now: Date = new Date()): UsageStats {
   const todayPrefix    = now.toISOString().slice(0, 10);
@@ -61,6 +132,7 @@ export function aggregateStats(entries: CostEntry[], now: Date = new Date()): Us
   const sessionWindow = emptySummary();
   const allTime       = emptySummary();
   const byModel: Record<string, UsageSummary> = {};
+  let windowOldest: string | null = null;
 
   for (const entry of entries) {
     const d = entry.timestamp.slice(0, 10);
@@ -69,13 +141,20 @@ export function aggregateStats(entries: CostEntry[], now: Date = new Date()): Us
     addToSummary(allTime, entry);
     if (m === monthPrefix) { addToSummary(thisMonth, entry); }
     if (d === todayPrefix) { addToSummary(today, entry); }
-    if (entry.timestamp >= windowCutoff) { addToSummary(sessionWindow, entry); }
+    if (entry.timestamp >= windowCutoff) {
+      addToSummary(sessionWindow, entry);
+      if (!windowOldest || entry.timestamp < windowOldest) { windowOldest = entry.timestamp; }
+    }
 
     if (!byModel[entry.model]) { byModel[entry.model] = emptySummary(); }
     addToSummary(byModel[entry.model], entry);
   }
 
-  return { today, thisMonth, sessionWindow, allTime, byModel, lastUpdated: now };
+  const sessionWindowExpiresAt = windowOldest
+    ? new Date(new Date(windowOldest).getTime() + SESSION_WINDOW_MS)
+    : null;
+
+  return { today, thisMonth, sessionWindow, sessionWindowExpiresAt, allTime, byModel, lastUpdated: now };
 }
 
 function isValidEntry(obj: unknown): obj is CostEntry {

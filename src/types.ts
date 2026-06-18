@@ -22,7 +22,8 @@ export interface UsageSummary {
 export interface UsageStats {
   today: UsageSummary;
   thisMonth: UsageSummary;
-  sessionWindow: UsageSummary;  // spending in the last 5 hours (rolling window)
+  sessionWindow: UsageSummary;         // spending in the last 5 hours (rolling window)
+  sessionWindowExpiresAt: Date | null; // when the oldest window entry expires (null if window is empty)
   allTime: UsageSummary;
   byModel: Record<string, UsageSummary>;
   lastUpdated: Date;

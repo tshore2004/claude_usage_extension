@@ -15,6 +15,7 @@ function makeStats(todayCost: number, monthCost: number, allTimeCost: number, se
     today: makeSummary(todayCost),
     thisMonth: makeSummary(monthCost),
     sessionWindow: makeSummary(sessionCost),
+    sessionWindowExpiresAt: null,
     allTime: makeSummary(allTimeCost),
     byModel: { 'claude-sonnet-4-6': makeSummary(allTimeCost) },
     lastUpdated: new Date('2026-06-18T12:00:00Z'),
@@ -39,12 +40,18 @@ suite('formatStatusBarText', () => {
   test('returns "No data" text when stats is null', () => {
     assert.ok(formatStatusBarText(null, 20).includes('No data'));
   });
-  test('shows percentage of session budget using sessionWindow cost', () => {
-    // sessionWindow=10 (sessionCost arg), sessionBudget=20 → 50%
+  test('shows sessionWindow cost as percentage of budget', () => {
+    // sessionWindow=10, budget=20 → 50%
     assert.ok(formatStatusBarText(makeStats(5, 20, 30, 10), 20).includes('50%'));
   });
   test('starts with claude-logo codicon', () => {
     assert.ok(formatStatusBarText(makeStats(5, 5, 5), 20).startsWith('$(claude-logo)'));
+  });
+  test('includes time remaining when sessionWindowExpiresAt is set', () => {
+    const stats = makeStats(5, 5, 5);
+    stats.sessionWindowExpiresAt = new Date(Date.now() + 2 * 3_600_000 + 30 * 60_000); // 2h 30m from now
+    const text = formatStatusBarText(stats, 20);
+    assert.ok(text.includes('2h'), `Expected time in: ${text}`);
   });
 });
 

@@ -20,7 +20,7 @@
         "description": "Claude-inspired hexagonal icon",
         "default": {
           "fontPath": "./icons/dist/claude-code-usage.ttf",
-          "fontCharacter": ""
+          "fontCharacter": ""
         }
       }
     },
