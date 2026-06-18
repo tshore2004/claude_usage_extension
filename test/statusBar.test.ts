@@ -36,13 +36,14 @@ suite('formatTokenCount', () => {
 
 suite('formatStatusBarText', () => {
   test('returns "No data" text when stats is null', () => {
-    assert.ok(formatStatusBarText(null).includes('No data'));
+    assert.ok(formatStatusBarText(null, 50).includes('No data'));
   });
-  test('includes formatted cost', () => {
-    assert.ok(formatStatusBarText(makeStats(15.313464, 20, 30)).includes('$15.31'));
+  test('shows percentage of monthly budget', () => {
+    // thisMonth=20, budget=50 → 40%
+    assert.ok(formatStatusBarText(makeStats(5, 20, 30), 50).includes('40%'));
   });
   test('starts with cloud codicon', () => {
-    assert.ok(formatStatusBarText(makeStats(5, 5, 5)).startsWith('$(cloud)'));
+    assert.ok(formatStatusBarText(makeStats(5, 5, 5), 50).startsWith('$(cloud)'));
   });
 });
 

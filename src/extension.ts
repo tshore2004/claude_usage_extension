@@ -16,10 +16,14 @@ export function activate(context: vscode.ExtensionContext): void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let watcher: fs.FSWatcher | null = null;
 
+  function getMonthlyBudget(): number {
+    return vscode.workspace.getConfiguration('claude-code-usage').get<number>('monthlyBudget', 50);
+  }
+
   async function refresh(): Promise<void> {
     try {
       currentStats = await readUsageStats(DEFAULT_COSTS_PATH);
-      statusBar.update(currentStats);
+      statusBar.update(currentStats, getMonthlyBudget());
     } catch (err) {
       statusBar.setError(err instanceof Error ? err.message : String(err));
     }

@@ -14,7 +14,18 @@
         "command": "claude-code-usage.showDetails",
         "title": "Claude Code Usage: Show Detailed Breakdown"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Claude Code Usage",
+      "properties": {
+        "claude-code-usage.monthlyBudget": {
+          "type": "number",
+          "default": 50,
+          "minimum": 1,
+          "description": "Your monthly Claude Code budget in USD. The status bar shows this month's spend as a percentage of this value."
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc --noEmit",

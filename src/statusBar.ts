@@ -11,17 +11,19 @@ export function formatTokenCount(n: number): string {
   return String(n);
 }
 
-export function formatStatusBarText(stats: UsageStats | null): string {
+export function formatStatusBarText(stats: UsageStats | null, monthlyBudget: number): string {
   if (!stats) { return '$(cloud) No data'; }
-  return `$(cloud) ${formatCost(stats.today.cost)} today`;
+  const pct = Math.round((stats.thisMonth.cost / monthlyBudget) * 100);
+  return `$(cloud) ${pct}%`;
 }
 
-export function formatTooltip(stats: UsageStats | null): string {
+export function formatTooltip(stats: UsageStats | null, monthlyBudget: number): string {
   if (!stats) { return 'Claude Code Usage: No data available'; }
   const { today, thisMonth, allTime } = stats;
+  const pct = Math.round((thisMonth.cost / monthlyBudget) * 100);
   return [
+    `This month: ${formatCost(thisMonth.cost)} / ${formatCost(monthlyBudget)} (${pct}%)`,
     `Today:      ${formatCost(today.cost)}`,
-    `This month: ${formatCost(thisMonth.cost)}`,
     `All time:   ${formatCost(allTime.cost)}`,
     `Updated:    ${stats.lastUpdated.toLocaleTimeString()}`,
   ].join('\n');
@@ -50,9 +52,9 @@ export class StatusBarController implements vscode.Disposable {
     this.item.show();
   }
 
-  update(stats: UsageStats | null): void {
-    this.item.text = formatStatusBarText(stats);
-    this.item.tooltip = formatTooltip(stats);
+  update(stats: UsageStats | null, monthlyBudget: number): void {
+    this.item.text = formatStatusBarText(stats, monthlyBudget);
+    this.item.tooltip = formatTooltip(stats, monthlyBudget);
   }
 
   setError(message: string): void {
